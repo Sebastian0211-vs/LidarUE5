@@ -1,10 +1,17 @@
+// CameraToRosPublisher.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Camera/CameraComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Sockets.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
+#include "HAL/RunnableThread.h"
 #include "CameraToRosPublisher.generated.h"
+
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class LIDAR_API UCameraToROSPublisher : public UActorComponent
@@ -26,6 +33,7 @@ private:
 
     FSocket* Socket;
     TSharedPtr<FInternetAddr> RemoteAddress;
+    FThreadSafeBool bIsSending = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
     UTextureRenderTarget2D* RenderTarget;
@@ -40,7 +48,7 @@ private:
     int32 RosPort = 9999;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ROS", meta = (AllowPrivateAccess = "true"))
-    float SendRate = 10.0f;
+    float SendRate = 30.0f;
 
     float TimeSinceLastCapture = 0.0f;
     float CaptureInterval = 0.1f;
