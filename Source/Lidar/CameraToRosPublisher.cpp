@@ -1,9 +1,13 @@
+// CameraToRosPublisher.cpp
 #include "CameraToRosPublisher.h"
 #include "Engine/World.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "Async/Async.h"
+#include "RenderResource.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "RenderUtils.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogCameraToROS, Log, All);
 
@@ -22,6 +26,9 @@ void UCameraToROSPublisher::BeginPlay()
         UE_LOG(LogCameraToROS, Error, TEXT("RenderTarget or CaptureComponent not assigned."));
         return;
     }
+
+    CaptureComponent->bCaptureEveryFrame = false;
+    CaptureComponent->bCaptureOnMovement = false;
 
     CaptureInterval = 1.0f / SendRate;
 
@@ -68,7 +75,7 @@ void UCameraToROSPublisher::TickComponent(float DeltaTime, ELevelTick TickType, 
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
     TimeSinceLastCapture += DeltaTime;
-    if (TimeSinceLastCapture >= CaptureInterval)
+    if (TimeSinceLastCapture >= CaptureInterval && !bIsSending)
     {
         TimeSinceLastCapture = 0.f;
         CaptureAndSendImage();
@@ -79,6 +86,8 @@ void UCameraToROSPublisher::CaptureAndSendImage()
 {
     if (!RenderTarget) return;
 
+    CaptureComponent->CaptureScene();
+
     FTextureRenderTargetResource* RTResource = RenderTarget->GameThread_GetRenderTargetResource();
     TArray<FColor> OutBMP;
     RTResource->ReadPixels(OutBMP);
@@ -86,9 +95,11 @@ void UCameraToROSPublisher::CaptureAndSendImage()
     int32 Width = RenderTarget->SizeX;
     int32 Height = RenderTarget->SizeY;
 
+    bIsSending = true;
     Async(EAsyncExecution::Thread, [this, OutBMP, Width, Height]()
         {
             SendImage(OutBMP, Width, Height);
+            bIsSending = false;
         });
 }
 
@@ -102,7 +113,6 @@ void UCameraToROSPublisher::SendImage(const TArray<FColor>& ImageData, int32 Wid
     const char* EncStr = Convert.Get();
     int32 EncLen = FCStringAnsi::Strlen(EncStr);
 
-    // Prepare raw RGB byte array (no alpha, RGB order)
     TArray<uint8> RGBData;
     RGBData.Reserve(Width * Height * 3);
     for (const FColor& Pixel : ImageData)
